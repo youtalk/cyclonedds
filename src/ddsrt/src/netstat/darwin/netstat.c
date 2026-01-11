@@ -2,6 +2,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <TargetConditionals.h>
+
+#if TARGET_OS_IOS || TARGET_OS_SIMULATOR || TARGET_OS_TV || TARGET_OS_WATCH
+/* iOS/tvOS/watchOS don't have net/if_mib.h - provide stub implementation */
+#include <dds/ddsrt/heap.h>
+#include <dds/ddsrt/string.h>
+#include <dds/ddsrt/netstat.h>
+
+struct ddsrt_netstat_control {
+  char *name;
+};
+
+dds_return_t ddsrt_netstat_new (struct ddsrt_netstat_control **control, const char *device)
+{
+  (void)device;
+  *control = NULL;
+  return DDS_RETCODE_ERROR;
+}
+
+dds_return_t ddsrt_netstat_free (struct ddsrt_netstat_control *control)
+{
+  (void)control;
+  return DDS_RETCODE_OK;
+}
+
+dds_return_t ddsrt_netstat_get (struct ddsrt_netstat_control *control, struct ddsrt_netstat *stats)
+{
+  (void)control;
+  (void)stats;
+  return DDS_RETCODE_ERROR;
+}
+
+#else
+/* macOS implementation with net/if_mib.h */
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -128,3 +162,5 @@ dds_return_t ddsrt_netstat_get (struct ddsrt_netstat_control *control, struct dd
   else
     return ddsrt_netstat_get_int (control, stats);
 }
+
+#endif /* TARGET_OS_IOS */

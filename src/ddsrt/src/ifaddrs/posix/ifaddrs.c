@@ -80,6 +80,16 @@ static enum ddsrt_iftype guess_iftype (const struct ifaddrs *sys_ifa)
   return type;
 }
 #elif defined(__APPLE__) || defined(__QNXNTO__) || defined(__FreeBSD__)  /* probably works for all BSDs */
+#include <TargetConditionals.h>
+#if TARGET_OS_IOS || TARGET_OS_SIMULATOR || TARGET_OS_TV || TARGET_OS_WATCH
+/* iOS/tvOS/watchOS don't have net/if_media.h - return UNKNOWN for interface type */
+static enum ddsrt_iftype guess_iftype (const struct ifaddrs *sys_ifa)
+{
+  (void)sys_ifa;
+  return DDSRT_IFTYPE_UNKNOWN;
+}
+#else
+/* macOS and other BSDs have net/if_media.h */
 #include <sys/ioctl.h>
 #include <sys/sockio.h>
 #include <net/if.h>
@@ -121,9 +131,11 @@ static enum ddsrt_iftype guess_iftype (const struct ifaddrs *sys_ifa)
   close (sock);
   return type;
 }
+#endif /* !TARGET_OS_IOS */
 #else
 static enum ddsrt_iftype guess_iftype (const struct ifaddrs *sys_ifa)
 {
+  (void)sys_ifa;
   return DDSRT_IFTYPE_UNKNOWN;
 }
 #endif
