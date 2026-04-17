@@ -27,6 +27,7 @@
 #include "dds/ddsi/q_log.h"
 #include "dds/ddsi/q_pcap.h"
 #include "dds/ddsi/ddsi_domaingv.h"
+#include "dds/ddsi/q_protocol.h"
 
 union addr {
   struct sockaddr_storage x;
@@ -149,6 +150,61 @@ static ssize_t ddsi_udp_conn_write (ddsi_tran_conn_t conn_cmn, const ddsi_locato
     // accrights/control implicitly initialised to 0
   };
   (void) flags; // in case ! DDSRT_MSGHDR_FLAGS
+
+  // Pad short UDP datagrams to avoid iOS WiFi packet truncation.
+  // iOS WiFi truncates small UDP packets (64 bytes -> 56 bytes observed),
+  // breaking RTPS HEARTBEAT/ACKNACK used in SEDP reliable discovery.
+  //
+  // Strategy: linearize, zero-pad to 128 bytes, then set the last
+  // submessage's octetsToNextHeader to 0 so the receiver interprets all
+  // remaining bytes (including padding) as part of that submessage.
+  // For SPDP/SEDP PL_CDR payloads, trailing zeros after PID_SENTINEL
+  // are harmless. For HEARTBEAT/ACKNACK, otnh is never 0 so the
+  // receiver uses octetsToNextHeader directly and ignores trailing bytes.
+#define DDSI_UDP_PAD_THRESHOLD 128
+#define RTPS_HEADER_SIZE 20
+  uint8_t padbuf[DDSI_UDP_PAD_THRESHOLD];
+  ddsrt_iovec_t pad_iov;
+  {
+    size_t total = 0;
+    for (size_t i = 0; i < niov; i++)
+      total += iov[i].iov_len;
+    if (total > RTPS_HEADER_SIZE + RTPS_SUBMESSAGE_HEADER_SIZE && total < DDSI_UDP_PAD_THRESHOLD)
+    {
+      // Linearize all iovecs
+      size_t off = 0;
+      for (size_t i = 0; i < niov; i++) {
+        memcpy (padbuf + off, iov[i].iov_base, iov[i].iov_len);
+        off += iov[i].iov_len;
+      }
+      // Find the last submessage and set its octetsToNextHeader to 0
+      // so the receiver uses (end - submsg) which includes our padding.
+      // Walk submessages starting after the 20-byte RTPS header.
+      size_t last_sm = RTPS_HEADER_SIZE;
+      size_t pos = RTPS_HEADER_SIZE;
+      while (pos + RTPS_SUBMESSAGE_HEADER_SIZE <= off)
+      {
+        last_sm = pos;
+        uint16_t otn;
+        memcpy (&otn, &padbuf[pos + 2], sizeof (otn));
+        if (otn == 0)
+          break; // last submessage already has otnh=0
+        size_t next = pos + RTPS_SUBMESSAGE_HEADER_SIZE + otn;
+        if (next >= off)
+          break; // this is the last submessage
+        pos = next;
+      }
+      // Set last submessage's octetsToNextHeader to 0
+      padbuf[last_sm + 2] = 0;
+      padbuf[last_sm + 3] = 0;
+      // Zero-pad to threshold
+      memset (&padbuf[off], 0, DDSI_UDP_PAD_THRESHOLD - off);
+      pad_iov.iov_base = padbuf;
+      pad_iov.iov_len = DDSI_UDP_PAD_THRESHOLD;
+      msg.msg_iov = &pad_iov;
+      msg.msg_iovlen = 1;
+    }
+  }
 
 #if MSG_NOSIGNAL && !LWIP_SOCKET
   sendflags |= MSG_NOSIGNAL;
