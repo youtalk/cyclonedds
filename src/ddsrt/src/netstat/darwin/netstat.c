@@ -4,8 +4,8 @@
 
 #include <TargetConditionals.h>
 
-#if TARGET_OS_IOS || TARGET_OS_SIMULATOR || TARGET_OS_TV || TARGET_OS_WATCH
-/* iOS/tvOS/watchOS don't have net/if_mib.h - provide stub implementation */
+#if TARGET_OS_IOS || TARGET_OS_SIMULATOR || TARGET_OS_TV || TARGET_OS_WATCH || TARGET_OS_VISION
+/* iOS/tvOS/watchOS/visionOS don't have net/if_mib.h - provide stub implementation */
 #include <dds/ddsrt/heap.h>
 #include <dds/ddsrt/string.h>
 #include <dds/ddsrt/netstat.h>
