@@ -81,7 +81,7 @@ static enum ddsrt_iftype guess_iftype (const struct ifaddrs *sys_ifa)
 }
 #elif defined(__APPLE__) || defined(__QNXNTO__) || defined(__FreeBSD__)  /* probably works for all BSDs */
 #include <TargetConditionals.h>
-#if TARGET_OS_IOS || TARGET_OS_SIMULATOR || TARGET_OS_TV || TARGET_OS_WATCH
+#if TARGET_OS_IOS || TARGET_OS_SIMULATOR || TARGET_OS_TV || TARGET_OS_WATCH || TARGET_OS_VISION
 /* iOS: net/if_media.h not available, use simple heuristic */
 static enum ddsrt_iftype guess_iftype (const struct ifaddrs *sys_ifa)
 {
